@@ -3,6 +3,12 @@ use std::fs;
 
 use std::io;
 
+enum Guess {
+    Green,
+    Yellow,
+    Black,
+}
+
 fn main() -> Result<(), std::io::Error> {
     let mut words: Vec<&str> = vec![];
     let data = fs::read_to_string("/usr/share/dict/words").expect("Unable to read file");
@@ -17,35 +23,41 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut green = vec!['.'; 5];
     let mut yellow = vec![];
-    let mut gray = vec![];
+    let mut black = vec![];
 
     loop {
         input.clear();
-        stdin.read_line(input);
+        stdin.read_line(input)?;
         let subs = parse_input(input);
         for (i, sub) in subs.iter().enumerate() {
             match sub.0 {
                 'g' => {
                     green[i] = sub.1;
                 }
-                'y' => yellow.push(sub.1),
-                'r' => gray.push(sub.1),
+                'y' => yellow.push((i, sub.1)),
+                'b' => black.push(sub.1),
                 _ => {}
             }
         }
-        let output = filter(words.clone(), green.clone(), yellow.clone(), gray.clone());
+        let output = filter(words.clone(), green.clone(), yellow.clone(), black.clone());
         for line in output {
-            println!("{:?}", line);
+            println!("{}", line);
         }
     }
 }
 
 fn parse_input(input: &str) -> Vec<(char, char)> {
     let subs = input
+        .replace('\n', "")
         .as_bytes()
         .chunks(2)
         .map(|s| unsafe { ::std::str::from_utf8_unchecked(s) })
-        .map(|s| (s.chars().next().unwrap(), s.chars().next().unwrap()))
+        .map(|s| {
+            let mut chars = s.chars();
+            let mark = chars.next().unwrap();
+            let c = chars.next().unwrap();
+            (mark, c)
+        })
         .collect::<Vec<_>>();
     subs
 }
@@ -57,15 +69,27 @@ fn filter_by_green(words: Vec<&str>, green: Vec<char>) -> Vec<&str> {
     words.iter().cloned().filter(|x| re.is_match(x)).collect()
 }
 
-fn filter_by_yellow_and_gray(words: Vec<&str>, yellow: Vec<char>, gray: Vec<char>) -> Vec<&str> {
+fn filter_by_yellow(words: Vec<&str>, yellow: Vec<(usize, char)>) -> Vec<&str> {
     let mut res = vec![];
     'outer: for word in words {
-        for y in &yellow {
+        for (i, y) in &yellow {
             if !word.contains(&y.to_string()) {
                 continue 'outer;
             }
+            // yellow should not be in same spot.
+            if word.chars().nth(*i).unwrap() == *y {
+                continue 'outer;
+            }
         }
-        for g in &gray {
+        res.push(word);
+    }
+    res
+}
+
+fn filter_by_black(words: Vec<&str>, black: Vec<char>) -> Vec<&str> {
+    let mut res = vec![];
+    'outer: for word in words {
+        for g in &black {
             if word.contains(&g.to_string()) {
                 continue 'outer;
             }
@@ -75,9 +99,16 @@ fn filter_by_yellow_and_gray(words: Vec<&str>, yellow: Vec<char>, gray: Vec<char
     res
 }
 
-fn filter(words: Vec<&str>, green: Vec<char>, yellow: Vec<char>, gray: Vec<char>) -> Vec<&str> {
-    let f = filter_by_green(words, green);
-    filter_by_yellow_and_gray(f, yellow, gray)
+fn filter(
+    words: Vec<&str>,
+    green: Vec<char>,
+    yellow: Vec<(usize, char)>,
+    black: Vec<char>,
+) -> Vec<&str> {
+    let mut filtered = filter_by_green(words, green);
+    filtered = filter_by_yellow(filtered, yellow);
+    filtered = filter_by_black(filtered, black);
+    filtered
 }
 
 #[cfg(test)]
@@ -90,13 +121,16 @@ mod tests {
     }
 
     #[test]
-    fn test_filter_by_yellow_and_gray() {
+    fn test_filter_by_yellow() {
         let words = vec!["audio", "clerk", "bloke"];
-        let yellow = vec!['o', 'e', 'k'];
-        let gray = vec!['a', 'u', 'd', 'i', 'c', 'r'];
-        assert_eq!(
-            super::filter_by_yellow_and_gray(words, yellow, gray),
-            vec!["bloke"]
-        );
+        let yellow = vec![(1, 'o'), (2, 'e'), (0, 'k')];
+        assert_eq!(super::filter_by_yellow(words, yellow), vec!["bloke"]);
+    }
+
+    #[test]
+    fn test_filter_by_black() {
+        let words = vec!["audio", "clerk", "bloke"];
+        let black = vec!['a', 'u', 'd', 'i', 'c', 'r'];
+        assert_eq!(super::filter_by_black(words, black), vec!["bloke"]);
     }
 }
