@@ -1,13 +1,9 @@
 use regex::Regex;
+use std::collections::HashMap;
 use std::fs;
+use std::hash::Hash;
 
 use std::io;
-
-enum Guess {
-    Green,
-    Yellow,
-    Black,
-}
 
 fn main() -> Result<(), std::io::Error> {
     let mut words: Vec<&str> = vec![];
@@ -39,7 +35,12 @@ fn main() -> Result<(), std::io::Error> {
                 _ => {}
             }
         }
-        let output = filter(words.clone(), green.clone(), yellow.clone(), black.clone());
+        let output = sort_by_frequency(filter(
+            words.clone(),
+            green.clone(),
+            yellow.clone(),
+            black.clone(),
+        ));
         for line in output {
             println!("{}", line);
         }
@@ -60,6 +61,37 @@ fn parse_input(input: &str) -> Vec<(char, char)> {
         })
         .collect::<Vec<_>>();
     subs
+}
+
+fn counter<T, I>(it: I) -> HashMap<T, usize>
+where
+    T: Eq + Hash,
+    I: Iterator<Item = T>,
+{
+    let mut count_by_element = HashMap::new();
+    for e in it {
+        *count_by_element.entry(e).or_insert(0) += 1;
+    }
+    count_by_element
+}
+
+fn get_score(counter: &HashMap<&char, usize>, word: &str) -> usize {
+    let mut uniq: Vec<char> = word.chars().collect();
+    uniq.sort_unstable();
+    uniq.dedup();
+    uniq.iter().map(|c| counter.get(c).unwrap()).sum()
+}
+
+fn sort_by_frequency(words: Vec<&str>) -> Vec<&str> {
+    let chars: Vec<char> = words.join("").chars().collect();
+    let chars_counter = counter(chars.iter());
+    let mut w = words.clone();
+    w.sort_by(|a, b| {
+        let a_score = get_score(&chars_counter, a);
+        let b_score = get_score(&chars_counter, b);
+        b_score.cmp(&a_score)
+    });
+    w
 }
 
 fn filter_by_green(words: Vec<&str>, green: Vec<char>) -> Vec<&str> {
@@ -132,5 +164,14 @@ mod tests {
         let words = vec!["audio", "clerk", "bloke"];
         let black = vec!['a', 'u', 'd', 'i', 'c', 'r'];
         assert_eq!(super::filter_by_black(words, black), vec!["bloke"]);
+    }
+
+    #[test]
+    fn test_sort_by_frequency() {
+        let words = vec!["audio", "clerk", "bloke"];
+        assert_eq!(
+            super::sort_by_frequency(words),
+            vec!["bloke", "clerk", "audio"]
+        );
     }
 }
