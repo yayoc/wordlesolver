@@ -21,6 +21,9 @@ fn main() -> Result<(), std::io::Error> {
     let mut yellow = vec![];
     let mut black = vec![];
 
+    println!("put g(green), y(yellow), or b(black) result prefix for each chars you input.");
+    println!("first candidate: {:?}", sort_by_frequency(words.clone())[0]);
+
     loop {
         input.clear();
         stdin.read_line(input)?;
